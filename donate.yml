@@ -1,0 +1,860 @@
+name: Build Donate
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Create project files
+        run: |
+          mkdir -p proj/src/main/java/donate proj/src/main/resources
+          cd proj
+          cat > pom.xml <<'DONATE_EOF_0'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+            <modelVersion>4.0.0</modelVersion>
+
+            <groupId>donate</groupId>
+            <artifactId>Donate</artifactId>
+            <version>1.0.0</version>
+            <packaging>jar</packaging>
+
+            <properties>
+              <maven.compiler.release>17</maven.compiler.release>
+              <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+            </properties>
+
+            <repositories>
+              <repository>
+                <id>repo-lanink-cn</id>
+                <url>https://repo.lanink.cn/repository/maven-public/</url>
+              </repository>
+            </repositories>
+
+            <dependencies>
+              <dependency>
+                <groupId>com.nukkit-mot</groupId>
+                <artifactId>nukkit-mot</artifactId>
+                <version>1.26.40-R1</version>
+                <scope>provided</scope>
+              </dependency>
+              <dependency>
+                <groupId>net.luckperms</groupId>
+                <artifactId>api</artifactId>
+                <version>5.4</version>
+                <scope>provided</scope>
+              </dependency>
+            </dependencies>
+
+            <build>
+              <finalName>Donate</finalName>
+              <plugins>
+                <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-compiler-plugin</artifactId>
+                  <version>3.11.0</version>
+                </plugin>
+              </plugins>
+            </build>
+          </project>
+          DONATE_EOF_0
+
+          cat > src/main/resources/plugin.yml <<'DONATE_EOF_1'
+          name: Donate
+          main: donate.DonatePlugin
+          version: 1.1.0
+          api: ["1.0.0"]
+          author: Eclips
+          softdepend: [LuckPerms]
+          description: Меню привилегий /donate и плашки /adon
+          commands:
+            donate:
+              description: Список донат-привилегий
+              usage: /donate
+            adon:
+              description: Поставить плашку с привилегиями (/adon remove - убрать ближайшую)
+              usage: /adon [remove]
+              permission: donate.admin
+          permissions:
+            donate.admin:
+              description: Управление плашками привилегий
+              default: op
+          DONATE_EOF_1
+
+          cat > src/main/resources/config.yml <<'DONATE_EOF_2'
+          # Donate - меню привилегий (/donate) и плашки (/adon)
+          # Название привилегии берётся из LuckPerms (display name группы), цвет - из префикса группы.
+          # Если LuckPerms недоступен или у группы нет префикса/названия - используются name и color отсюда.
+          # Цвета: §0-§9, §a-§f, жирный §l, сброс §r. Ключ группы (vip, premium...) = имя группы в LuckPerms.
+          # В шаблонах: {color} - цвет привилегии, {name} - название, {price} - цена (см. ниже),
+          # {owned} - галочка, если у игрока есть эта привилегия (берётся из LuckPerms).
+
+          title: "§lДонат"
+
+          # Текст над списком привилегий (можно несколько строк через \n)
+          header: "Для покупки пишите в телеграм @Mysticwinds21."
+
+          # Заголовок списка привилегий в главном меню (оставьте "" чтобы убрать)
+          list-title: ""
+
+          # Строка привилегии в списке главного меню ({price} = цена за 30 дней)
+          list-format: "§l{color}{name}§r{owned} §7от {price} ₽"
+
+          # Текст кнопки привилегии в главном меню ({price} = цена за 30 дней)
+          button-format: "§l{color}{name}{owned} §r§7от {price} ₽"
+
+          # Список цен в окне привилегии (под названием); {price} = цена за соответствующий срок
+          # {save}   - выгода 90 дней в % по сравнению с покупкой 30 дней три раза подряд (считается само)
+          # {months} - за сколько месяцев "навсегда" окупается по сравнению с покупкой на 30 дней (считается само)
+          # {best}   - пометка best-mark у самого выгодного варианта (у кого ниже цена за год покупок)
+          price-format:
+            d30: "§f30 дней: §e{price} ₽{best}"
+            d90: "§f90 дней: §e{price} ₽ §a(выгода {save}%){best}"
+            forever: "§fНавсегда: §e{price} ₽ §a(окупится за {months} мес.){best}"
+          best-mark: " §6★ Выгодно"
+
+          # Отметка у привилегий, которые есть у игрока
+          owned-mark: " §a✔"
+
+          # Строка "Ваша привилегия" вверху главного меню (показывается, если установлен LuckPerms)
+          your-rank-format: "§7Ваша привилегия: {color}§l{name}"
+          your-rank-none: "§7Ваша привилегия: §fнет"
+
+          # Оформление окна привилегии
+          separator: "§8━━━━━━━━━━━━━━━━━━"
+          includes-prefix: "Все возможности"
+          # {prevcolor} - цвет предыдущей привилегии, {line} - сама строка
+          includes-format: "{prevcolor}{line}"
+          kit-prefix: "Кит"
+          kit-format: "§6✦ §e{line}"
+          commands-title: "§7Команды:"
+
+          # Кнопка возврата в окне привилегии
+          back-button: "§l← Назад"
+
+          # Сообщение для консоли
+          console-message: "Команда только для игроков."
+
+          # Плашка /adon (текст над землёй, сама поворачивается к игроку)
+          plaque:
+            # Заголовок плашки (оставьте "" чтобы убрать)
+            title: "§lДонат"
+            # Строка над всеми привилегиями (под заголовком), оставьте "" чтобы убрать
+            top: "§f/donate §7подробнее"
+            # Строка каждой привилегии ({price} = цена за 30 дней)
+            line: "{color}{name} от {price} рублей"
+            # На сколько блоков выше ног игрока ставится плашка
+            y-offset: 1.6
+
+          # Привилегии. prices: d30 - 30 дней, d90 - 90 дней, forever - навсегда (в рублях).
+          # Строки lines: если строка начинается с "/" - формат "команда - описание"
+          # (делится по первому " - "), остальные строки выводятся как есть.
+          groups:
+            vip:
+              name: "Вип"
+              color: "§9"
+              prices:
+                d30: 45
+                d90: 59
+                forever: 149
+              lines:
+                - "Кит Вип"
+                - "/day - включить день"
+                - "/craft - открыть верстак"
+                - "/ec - открыть эндер-сундук"
+                - "/firework - фейерверк над игроком"
+            premium:
+              name: "Премиум"
+              color: "§6"
+              prices:
+                d30: 89
+                d90: 124
+                forever: 299
+              lines:
+                - "Все возможности Вип"
+                - "Кит Премиум"
+                - "/heal - восстановить здоровье"
+                - "/jump - высокий прыжок"
+                - "/milk - снять все эффекты"
+                - "/suicide - умереть"
+                - "/anvil - открыть наковальню"
+                - "/condense - собрать одинаковые предметы в полные стаки"
+                - "/breath - дыхание под водой"
+            ultra:
+              name: "Ультра"
+              color: "§d"
+              prices:
+                d30: 179
+                d90: 249
+                forever: 599
+              lines:
+                - "Все возможности Премиум"
+                - "Кит Ультра"
+                - "/timefly - включить или выключить полёт"
+                - "/mol - ударить игрока молнией"
+                - "/night - выдать себе ночное зрение"
+                - "/setnight - установить ночь на сервере"
+                - "/furnace - открыть печку"
+                - "/smelt - переплавить всю стопку руды в руке"
+                - "/fix - починить предмет в руке"
+                - "/nofall - отключить урон от падения"
+            king:
+              name: "Король"
+              color: "§a"
+              prices:
+                d30: 314
+                d90: 435
+                forever: 1049
+              lines:
+                - "Все возможности Ультра"
+                - "Кит Король"
+                - "/fire - поджечь игрока"
+                - "/v - невидемость"
+                - "/dkick <ник> <причина> - кикнуть игрока"
+                - "/rename - переименовать предмет в руке"
+                - "/compress - сжать слитки в блоки"
+                - "/waterwalk - ходьба по воде"
+                - "/tpback - вернуться на место последней смерти"
+            sponsor:
+              name: "Спонсор"
+              color: "§e"
+              prices:
+                d30: 449
+                d90: 624
+                forever: 1499
+              lines:
+                - "Все возможности Король"
+                - "Кит Спонсор"
+                - "/dmute <ник> <время> <причина> - замутить игрока"
+                - "/dunmute <ник> - снять мут"
+                - "/treecap - срубить дерево целиком"
+                - "/dheal <ник> - вылечить игрока"
+            elita:
+              name: "Элита"
+              color: "§2"
+              prices:
+                d30: 719
+                d90: 999
+                forever: 2399
+              lines:
+                - "Все возможности Спонсор"
+                - "Кит Элита"
+                - "/size - изменить размер персонажа"
+                - "/dpremium <ник> - выдать игроку Премиум на 60 минут"
+                - "/sp - режим наблюдателя"
+                - "/spoff - выйти из режима наблюдателя"
+                - "/repairall - починить всю броню и инструменты"
+                - "/dinvsee <ник> - посмотреть инвентарь игрока"
+            helper:
+              name: "Хелпер"
+              color: "§8"
+              prices:
+                d30: 1169
+                d90: 1624
+                forever: 3899
+              lines:
+                - "Все возможности Элита"
+                - "Кит Хелпер"
+                - "/creep - заспавнить криперов рядом с игроком"
+                - "/speed - изменить скорость"
+                - "/vtp - телепорт к игроку без разрешения"
+                - "/dban <ник> <минуты> <причина> - забанить игрока"
+                - "/dunban <ник> - разбанить игрока"
+                - "/dprem+ <ник> - выдать игроку Премиум на 24 часа"
+          DONATE_EOF_2
+
+          cat > src/main/java/donate/DonatePlugin.java <<'DONATE_EOF_3'
+          package donate;
+
+          import cn.nukkit.Player;
+          import cn.nukkit.command.Command;
+          import cn.nukkit.command.CommandSender;
+          import cn.nukkit.event.EventHandler;
+          import cn.nukkit.event.Listener;
+          import cn.nukkit.event.player.PlayerFormRespondedEvent;
+          import cn.nukkit.event.player.PlayerJoinEvent;
+          import cn.nukkit.event.player.PlayerQuitEvent;
+          import cn.nukkit.form.element.ElementButton;
+          import cn.nukkit.form.response.FormResponseSimple;
+          import cn.nukkit.form.window.FormWindowSimple;
+          import cn.nukkit.level.Level;
+          import cn.nukkit.level.particle.FloatingTextParticle;
+          import cn.nukkit.math.Vector3;
+          import cn.nukkit.plugin.PluginBase;
+          import cn.nukkit.scheduler.Task;
+          import cn.nukkit.utils.Config;
+          import cn.nukkit.utils.ConfigSection;
+          import net.luckperms.api.LuckPerms;
+          import net.luckperms.api.LuckPermsProvider;
+          import net.luckperms.api.model.group.Group;
+          import net.luckperms.api.model.user.User;
+          import net.luckperms.api.query.QueryOptions;
+
+          import java.io.File;
+          import java.util.ArrayList;
+          import java.util.HashMap;
+          import java.util.HashSet;
+          import java.util.LinkedHashMap;
+          import java.util.List;
+          import java.util.Locale;
+          import java.util.Map;
+          import java.util.Set;
+          import java.util.UUID;
+          import java.util.regex.Matcher;
+          import java.util.regex.Pattern;
+
+          public class DonatePlugin extends PluginBase implements Listener {
+
+              private static final Pattern COLOR = Pattern.compile("[&§]([0-9a-fA-F])");
+
+              private static class State {
+                  final int formId;
+                  final int groupIndex; // -1 = главное меню, иначе открыто окно привилегии
+
+                  State(int formId, int groupIndex) {
+                      this.formId = formId;
+                      this.groupIndex = groupIndex;
+                  }
+              }
+
+              private static class Rank {
+                  String key;
+                  String name;
+                  String color;
+                  String price30;
+                  String price90;
+                  String priceForever;
+                  boolean owned;
+                  List<String> lines;
+              }
+
+              private static class Plaque {
+                  String id;
+                  String level;
+                  double x, y, z;
+                  FloatingTextParticle particle;
+              }
+
+              private final Map<UUID, State> pending = new HashMap<>();
+              private final Map<String, Plaque> plaques = new LinkedHashMap<>();
+              private Config plaqueData;
+
+              @Override
+              public void onEnable() {
+                  saveDefaultConfig();
+                  getDataFolder().mkdirs();
+                  plaqueData = new Config(new File(getDataFolder(), "plaques.yml"), Config.YAML);
+                  loadPlaques();
+                  getServer().getPluginManager().registerEvents(this, this);
+
+                  // небольшая задержка, чтобы LuckPerms и миры успели загрузиться
+                  getServer().getScheduler().scheduleDelayedTask(this, new Task() {
+                      @Override
+                      public void onRun(int currentTick) {
+                          refreshPlaques();
+                      }
+                  }, 40);
+
+                  // обновление текста (цвета/названия из LuckPerms) и повторная отправка плашек игрокам
+                  getServer().getScheduler().scheduleRepeatingTask(this, new Task() {
+                      @Override
+                      public void onRun(int currentTick) {
+                          refreshPlaques();
+                      }
+                  }, 100);
+              }
+
+              @Override
+              public void onDisable() {
+                  for (Plaque pl : plaques.values()) {
+                      hidePlaque(pl);
+                  }
+              }
+
+              // ---------- Команды ----------
+
+              @Override
+              public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+                  String name = command.getName().toLowerCase();
+
+                  if (name.equals("donate")) {
+                      if (args.length > 0 && args[0].equalsIgnoreCase("reload") && sender.isOp()) {
+                          reloadConfig();
+                          reloadPlaques();
+                          sender.sendMessage("§aКонфиг Donate перезагружен.");
+                          return true;
+                      }
+                      if (!(sender instanceof Player)) {
+                          sender.sendMessage(getConfig().getString("console-message", "Команда только для игроков."));
+                          return true;
+                      }
+                      openMain((Player) sender);
+                      return true;
+                  }
+
+                  if (name.equals("adon")) {
+                      if (!(sender instanceof Player)) {
+                          sender.sendMessage(getConfig().getString("console-message", "Команда только для игроков."));
+                          return true;
+                      }
+                      if (!sender.isOp() && !sender.hasPermission("donate.admin")) {
+                          sender.sendMessage("§cУ вас нет прав.");
+                          return true;
+                      }
+                      Player player = (Player) sender;
+                      if (args.length > 0 && args[0].equalsIgnoreCase("remove")) {
+                          removeNearest(player);
+                      } else {
+                          spawnPlaque(player);
+                      }
+                      return true;
+                  }
+                  return false;
+              }
+
+              // ---------- Данные о привилегиях ----------
+
+              private LuckPerms luckPerms() {
+                  try {
+                      if (getServer().getPluginManager().getPlugin("LuckPerms") == null) {
+                          return null;
+                      }
+                      return LuckPermsProvider.get();
+                  } catch (Throwable t) {
+                      return null;
+                  }
+              }
+
+              private List<Rank> loadRanks() {
+                  List<Rank> ranks = new ArrayList<>();
+                  ConfigSection groups = getConfig().getSection("groups");
+                  if (groups == null) {
+                      return ranks;
+                  }
+                  LuckPerms lp = luckPerms();
+                  for (String key : groups.getKeys(false)) {
+                      ConfigSection sec = groups.getSection(key);
+                      Rank r = new Rank();
+                      r.key = key;
+                      r.name = sec.getString("name", key);
+                      r.color = sec.getString("color", "§f");
+                      r.price30 = sec.getString("prices.d30", "?");
+                      r.price90 = sec.getString("prices.d90", "?");
+                      r.priceForever = sec.getString("prices.forever", "?");
+                      r.lines = sec.getStringList("lines");
+
+                      if (lp != null) {
+                          try {
+                              Group g = lp.getGroupManager().getGroup(key);
+                              if (g != null) {
+                                  String friendly = g.getFriendlyName();
+                                  if (friendly != null && !friendly.isEmpty()) {
+                                      r.name = friendly;
+                                  }
+                                  String prefix = g.getCachedData().getMetaData().getPrefix();
+                                  if (prefix != null) {
+                                      Matcher m = COLOR.matcher(prefix);
+                                      if (m.find()) {
+                                          r.color = "§" + m.group(1).toLowerCase();
+                                      }
+                                  }
+                              }
+                          } catch (Throwable ignored) {
+                              // остаются значения из конфига
+                          }
+                      }
+                      ranks.add(r);
+                  }
+                  return ranks;
+              }
+
+              private String fmt(String template, Rank r, String price) {
+                  return template
+                          .replace("{color}", r.color)
+                          .replace("{name}", r.name)
+                          .replace("{price}", price)
+                          .replace("{owned}", r.owned ? getConfig().getString("owned-mark", " §a✔") : "");
+              }
+
+              private double num(String s) {
+                  try {
+                      return Double.parseDouble(s.trim());
+                  } catch (Exception e) {
+                      return -1;
+                  }
+              }
+
+              /** Одна цифра после запятой, без ".0": 3,3 или 4. */
+              private String oneDecimal(double v) {
+                  String s = String.format(Locale.US, "%.1f", v);
+                  if (s.endsWith(".0")) {
+                      s = s.substring(0, s.length() - 2);
+                  }
+                  return s.replace('.', ',');
+              }
+
+              private String priceLine(String template, Rank r, String price, String save, String months, boolean best) {
+                  String bestMark = best ? getConfig().getString("best-mark", " §6★ Выгодно") : "";
+                  return fmt(template, r, price)
+                          .replace("{save}", save)
+                          .replace("{months}", months)
+                          .replace("{best}", bestMark);
+              }
+
+              /**
+               * Отмечает привилегии, которые есть у игрока (с учётом наследования групп в LuckPerms).
+               * Возвращает самую старшую из них по порядку в конфиге или null.
+               */
+              private Rank markOwned(Player player, List<Rank> ranks) {
+                  LuckPerms lp = luckPerms();
+                  if (lp == null) {
+                      return null;
+                  }
+                  try {
+                      User user = lp.getUserManager().getUser(player.getUniqueId());
+                      if (user == null) {
+                          return null;
+                      }
+                      Set<String> names = new HashSet<>();
+                      for (Group g : user.getInheritedGroups(QueryOptions.nonContextual())) {
+                          names.add(g.getName().toLowerCase());
+                      }
+                      Rank top = null;
+                      for (Rank r : ranks) {
+                          if (names.contains(r.key.toLowerCase())) {
+                              r.owned = true;
+                              top = r;
+                          }
+                      }
+                      return top;
+                  } catch (Throwable t) {
+                      return null;
+                  }
+              }
+
+              // ---------- Формы ----------
+
+              private void openMain(Player player) {
+                  List<Rank> ranks = loadRanks();
+                  String listFormat = getConfig().getString("list-format", "§l{color}{name}§r §7от {price} ₽");
+                  String buttonFormat = getConfig().getString("button-format", "§l{color}{name} §r§7от {price} ₽");
+
+                  Rank mine = markOwned(player, ranks);
+
+                  StringBuilder content = new StringBuilder();
+                  if (luckPerms() != null) {
+                      if (mine != null) {
+                          content.append(fmt(getConfig().getString("your-rank-format", "§7Ваша привилегия: {color}§l{name}"), mine, mine.price30));
+                      } else {
+                          content.append(getConfig().getString("your-rank-none", "§7Ваша привилегия: §fнет"));
+                      }
+                      content.append("\n\n");
+                  }
+                  content.append(getConfig().getString("header", "")).append("\n\n");
+                  String listTitle = getConfig().getString("list-title", "");
+                  if (!listTitle.isEmpty()) {
+                      content.append(listTitle).append("\n");
+                  }
+                  for (Rank r : ranks) {
+                      content.append(fmt(listFormat, r, r.price30)).append("\n");
+                  }
+
+                  FormWindowSimple form = new FormWindowSimple(getConfig().getString("title", "§lДонат"), content.toString());
+                  for (Rank r : ranks) {
+                      form.addButton(new ElementButton(fmt(buttonFormat, r, r.price30)));
+                  }
+                  int id = player.showFormWindow(form);
+                  pending.put(player.getUniqueId(), new State(id, -1));
+              }
+
+              private void openRank(Player player, int index) {
+                  List<Rank> ranks = loadRanks();
+                  if (index < 0 || index >= ranks.size()) {
+                      openMain(player);
+                      return;
+                  }
+                  Rank r = ranks.get(index);
+                  Rank prev = index > 0 ? ranks.get(index - 1) : null;
+                  String sep = getConfig().getString("separator", "§8━━━━━━━━━━━━━━━━━━");
+
+                  // честный расчёт выгоды
+                  double p30 = num(r.price30);
+                  double p90 = num(r.price90);
+                  double pf = num(r.priceForever);
+                  String save = "?";
+                  String months = "?";
+                  if (p30 > 0 && p90 > 0) {
+                      save = String.valueOf(Math.round((1.0 - p90 / (3.0 * p30)) * 100.0));
+                  }
+                  if (p30 > 0 && pf > 0) {
+                      months = oneDecimal(pf / p30);
+                  }
+                  // самый выгодный вариант = минимальные траты за год (365 дней)
+                  int bestIdx = -1;
+                  double bestCost = Double.MAX_VALUE;
+                  double[] yearCost = {
+                          p30 > 0 ? p30 * 365.0 / 30.0 : -1,
+                          p90 > 0 ? p90 * 365.0 / 90.0 : -1,
+                          pf > 0 ? pf : -1
+                  };
+                  for (int i = 0; i < yearCost.length; i++) {
+                      if (yearCost[i] > 0 && yearCost[i] < bestCost) {
+                          bestCost = yearCost[i];
+                          bestIdx = i;
+                      }
+                  }
+
+                  StringBuilder content = new StringBuilder();
+                  content.append("§l").append(r.color).append(r.name).append("§r\n");
+                  content.append(sep).append("\n");
+                  content.append(priceLine(getConfig().getString("price-format.d30", "§f30 дней: §e{price} ₽{best}"),
+                          r, r.price30, save, months, bestIdx == 0)).append("\n");
+                  content.append(priceLine(getConfig().getString("price-format.d90", "§f90 дней: §e{price} ₽ §a(выгода {save}%){best}"),
+                          r, r.price90, save, months, bestIdx == 1)).append("\n");
+                  content.append(priceLine(getConfig().getString("price-format.forever", "§fНавсегда: §e{price} ₽ §a(окупится за {months} мес.){best}"),
+                          r, r.priceForever, save, months, bestIdx == 2)).append("\n");
+                  content.append(sep).append("\n");
+
+                  String includesPrefix = getConfig().getString("includes-prefix", "Все возможности");
+                  String kitPrefix = getConfig().getString("kit-prefix", "Кит");
+                  boolean commandsTitleShown = false;
+                  for (String line : r.lines) {
+                      if (line.startsWith("/")) {
+                          int split = line.indexOf(" - ");
+                          if (split > 0) {
+                              if (!commandsTitleShown) {
+                                  content.append("\n").append(getConfig().getString("commands-title", "§7Команды:")).append("\n");
+                                  commandsTitleShown = true;
+                              }
+                              String cmd = line.substring(0, split);
+                              String desc = line.substring(split + 3);
+                              content.append("§f").append(cmd).append(" §7- ").append(desc).append("§r\n");
+                              continue;
+                          }
+                      }
+                      if (line.startsWith(includesPrefix)) {
+                          String prevColor = prev != null ? prev.color : "§7";
+                          content.append(getConfig().getString("includes-format", "{prevcolor}{line}")
+                                  .replace("{prevcolor}", prevColor).replace("{line}", line)).append("§r\n");
+                      } else if (line.startsWith(kitPrefix)) {
+                          content.append(getConfig().getString("kit-format", "§6✦ §e{line}")
+                                  .replace("{line}", line)).append("§r\n");
+                      } else {
+                          content.append("§f").append(line).append("§r\n");
+                      }
+                  }
+
+                  FormWindowSimple form = new FormWindowSimple("§l" + r.color + r.name, content.toString());
+                  form.addButton(new ElementButton(getConfig().getString("back-button", "§l← Назад")));
+                  int id = player.showFormWindow(form);
+                  pending.put(player.getUniqueId(), new State(id, index));
+              }
+
+              @EventHandler
+              public void onForm(PlayerFormRespondedEvent event) {
+                  Player player = event.getPlayer();
+                  State state = pending.get(player.getUniqueId());
+                  if (state == null || state.formId != event.getFormID()) {
+                      return;
+                  }
+                  pending.remove(player.getUniqueId());
+
+                  if (event.wasClosed() || !(event.getResponse() instanceof FormResponseSimple)) {
+                      return;
+                  }
+                  int clicked = ((FormResponseSimple) event.getResponse()).getClickedButtonId();
+
+                  if (state.groupIndex == -1) {
+                      openRank(player, clicked);
+                  } else {
+                      openMain(player);
+                  }
+              }
+
+              @EventHandler
+              public void onQuit(PlayerQuitEvent event) {
+                  pending.remove(event.getPlayer().getUniqueId());
+              }
+
+              @EventHandler
+              public void onJoin(PlayerJoinEvent event) {
+                  final Player player = event.getPlayer();
+                  getServer().getScheduler().scheduleDelayedTask(this, new Task() {
+                      @Override
+                      public void onRun(int currentTick) {
+                          if (!player.isOnline()) {
+                              return;
+                          }
+                          for (Plaque pl : plaques.values()) {
+                              if (pl.particle != null && player.getLevel() != null
+                                      && player.getLevel().getName().equals(pl.level)) {
+                                  player.getLevel().addParticle(pl.particle, player);
+                              }
+                          }
+                      }
+                  }, 40);
+              }
+
+              // ---------- Плашки (/adon) ----------
+
+              private void loadPlaques() {
+                  plaques.clear();
+                  for (String id : plaqueData.getKeys(false)) {
+                      ConfigSection sec = plaqueData.getSection(id);
+                      if (sec == null) {
+                          continue;
+                      }
+                      Plaque pl = new Plaque();
+                      pl.id = id;
+                      pl.level = sec.getString("level", "");
+                      pl.x = sec.getDouble("x");
+                      pl.y = sec.getDouble("y");
+                      pl.z = sec.getDouble("z");
+                      plaques.put(id, pl);
+                  }
+              }
+
+              private String buildPlaqueText() {
+                  List<Rank> ranks = loadRanks();
+                  String lineFormat = getConfig().getString("plaque.line", "{color}{name} от {price} рублей");
+                  StringBuilder sb = new StringBuilder();
+                  String title = getConfig().getString("plaque.title", "");
+                  if (!title.isEmpty()) {
+                      sb.append(title).append("\n");
+                  }
+                  String top = getConfig().getString("plaque.top", "");
+                  if (!top.isEmpty()) {
+                      sb.append(top).append("\n");
+                  }
+                  for (int i = 0; i < ranks.size(); i++) {
+                      Rank r = ranks.get(i);
+                      sb.append(fmt(lineFormat, r, r.price30));
+                      if (i < ranks.size() - 1) {
+                          sb.append("\n");
+                      }
+                  }
+                  return sb.toString();
+              }
+
+              /** Обновляет текст плашек и заново отправляет их игрокам в том же мире. */
+              private void refreshPlaques() {
+                  if (plaques.isEmpty()) {
+                      return;
+                  }
+                  String text = buildPlaqueText();
+                  double offset = getConfig().getDouble("plaque.y-offset", 1.6);
+                  for (Plaque pl : plaques.values()) {
+                      Level level = getServer().getLevelByName(pl.level);
+                      if (level == null) {
+                          continue;
+                      }
+                      if (pl.particle == null) {
+                          pl.particle = new FloatingTextParticle(new Vector3(pl.x, pl.y + offset, pl.z), "", "");
+                      }
+                      pl.particle.setTitle(text);
+                      pl.particle.setText("");
+                      pl.particle.setInvisible(false);
+                      Player[] players = level.getPlayers().values().toArray(new Player[0]);
+                      if (players.length > 0) {
+                          level.addParticle(pl.particle, players);
+                      }
+                  }
+              }
+
+              private void hidePlaque(Plaque pl) {
+                  if (pl.particle == null) {
+                      return;
+                  }
+                  Level level = getServer().getLevelByName(pl.level);
+                  pl.particle.setInvisible(true);
+                  if (level != null) {
+                      Player[] players = level.getPlayers().values().toArray(new Player[0]);
+                      if (players.length > 0) {
+                          level.addParticle(pl.particle, players);
+                      }
+                  }
+                  pl.particle = null;
+              }
+
+              private void reloadPlaques() {
+                  for (Plaque pl : plaques.values()) {
+                      hidePlaque(pl);
+                  }
+                  refreshPlaques();
+              }
+
+              private void spawnPlaque(Player player) {
+                  int next = 1;
+                  for (String id : plaques.keySet()) {
+                      try {
+                          next = Math.max(next, Integer.parseInt(id.substring(1)) + 1);
+                      } catch (Exception ignored) {
+                          // чужой ключ - пропускаем
+                      }
+                  }
+                  Plaque pl = new Plaque();
+                  pl.id = "p" + next;
+                  pl.level = player.getLevel().getName();
+                  pl.x = player.getX();
+                  pl.y = player.getY();
+                  pl.z = player.getZ();
+                  plaques.put(pl.id, pl);
+
+                  plaqueData.set(pl.id + ".level", pl.level);
+                  plaqueData.set(pl.id + ".x", pl.x);
+                  plaqueData.set(pl.id + ".y", pl.y);
+                  plaqueData.set(pl.id + ".z", pl.z);
+                  plaqueData.save();
+
+                  refreshPlaques();
+                  player.sendMessage("§aПлашка #" + next + " создана. Убрать ближайшую: §f/adon remove");
+              }
+
+              private void removeNearest(Player player) {
+                  Plaque nearest = null;
+                  double best = 6.0 * 6.0;
+                  for (Plaque pl : plaques.values()) {
+                      if (!pl.level.equals(player.getLevel().getName())) {
+                          continue;
+                      }
+                      double dx = pl.x - player.getX();
+                      double dy = pl.y - player.getY();
+                      double dz = pl.z - player.getZ();
+                      double dist = dx * dx + dy * dy + dz * dz;
+                      if (dist <= best) {
+                          best = dist;
+                          nearest = pl;
+                      }
+                  }
+                  if (nearest == null) {
+                      player.sendMessage("§cРядом (6 блоков) нет плашек.");
+                      return;
+                  }
+                  hidePlaque(nearest);
+                  plaques.remove(nearest.id);
+                  plaqueData.remove(nearest.id);
+                  plaqueData.save();
+                  player.sendMessage("§aПлашка " + nearest.id + " удалена.");
+              }
+          }
+          DONATE_EOF_3
+
+      - name: Build with Maven
+        run: mvn -B -f proj/pom.xml clean package
+
+      - name: Upload Donate.jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: Donate
+          path: proj/target/Donate.jar
